@@ -1,108 +1,92 @@
+#!/usr/bin/env node
+import { readdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { getConfig } from './config.js';
+import { McpServerApp, ToolDefinition } from './server.js';
 
-import archiver from "archiver";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
-import { Readable } from "stream";
-import { ApiValidationSummary, Transformation } from "./sdks/apimatic-api/src";
-import { ExportFormats } from "./sdks/apimatic-api/src/models/exportFormats.js";
-const {TransformationController}  = require("./sdks/apimatic-api/src/controllers/transformationController.js");
-const { Client, ApiError, ContentType, FileWrapper } = require("./sdks/apimatic-api/src/index.js");
+async function discoverTools(): Promise<ToolDefinition[]> {
+  const toolsDirUrl = new URL('./tools/', import.meta.url);
+  const toolsDirPath = fileURLToPath(toolsDirUrl);
+  const entries = await readdir(toolsDirPath);
+  entries.sort();
+  const definitions: ToolDefinition[] = [];
 
-// Constants
-const USER_AGENT = "apimatic-validator-mcp/1.0";
-const APIMATIC_API_KEY = process.env.APIMATIC_API_KEY;
+  for (const entry of entries) {
+    if (!/\.(t|j)sx?$/.test(entry) || entry.endsWith('.d.ts')) {
+      continue;
+    }
 
-if (!APIMATIC_API_KEY) {
-  console.error("Missing APIMATIC_API_KEY. Please set the environment variable.");
-  process.exit(1);
+    const moduleCandidates = [entry];
+
+    if (entry.endsWith('.ts')) {
+      moduleCandidates.push(entry.replace(/\.ts$/, '.js'));
+    }
+
+    let toolModule: Record<string, unknown> | null = null;
+
+    for (const candidate of moduleCandidates) {
+      const moduleUrl = new URL(candidate, toolsDirUrl);
+      try {
+        toolModule = await import(moduleUrl.href);
+        break;
+      } catch (error) {
+        if (candidate === moduleCandidates[moduleCandidates.length - 1]) {
+          throw error;
+        }
+      }
+    }
+
+    if (!toolModule) {
+      continue;
+    }
+
+    const tool = (toolModule.default ?? toolModule) as ToolDefinition;
+
+    if (tool?.name) {
+      definitions.push(tool);
+    }
+  }
+
+  return definitions;
 }
 
-// MCP Server Initialization
-const server = new McpServer({
-  name: "APIMatic Validator MCP",
-  version: "1.0.0",
+async function listTools(tools: ToolDefinition[]): Promise<void> {
+  if (!tools.length) {
+    console.log('No tools registered.');
+    return;
+  }
+
+  console.log('Available MCP tools:');
+  for (const tool of tools) {
+    console.log(`- ${tool.name} (${tool.method} ${tool.path})`);
+    if (tool.description) {
+      console.log(`  ${tool.description}`);
+    }
+  }
+}
+
+async function startServer(command: string): Promise<void> {
+  const config = getConfig();
+  const tools = await discoverTools();
+
+  const server = new McpServerApp({ config });
+  server.registerTools(tools);
+  await server.init();
+
+  if (command === 'list-tools') {
+    await listTools(tools);
+    return;
+  }
+
+  if (command !== 'start') {
+    console.warn(`Unknown command "${command}". Starting server instead.`);
+  }
+
+  await server.start();
+}
+
+startServer(process.argv[2] ?? 'start').catch((error) => {
+  console.error('Failed to start MCP server:', error);
+  process.exit(1);
 });
 
-/**
- * Creates a ZIP file containing the OpenAPI specification and metadata.
- */
-async function createZipFile(openApiContent: string, isYaml: boolean): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const archive = archiver("zip", { zlib: { level: 9 } });
-    const buffers: Buffer[] = [];
-
-    archive.on("data", (chunk) => buffers.push(chunk));
-    archive.on("end", () => resolve(Buffer.concat(buffers)));
-    archive.on("error", (err) => reject(err));
-
-    archive.append(openApiContent, { name: `openapi.${isYaml ? "yaml" : "json"}` });
-
-    const metaContent = JSON.stringify({ ImportSettings: { UseStrictValidation: true } });
-    archive.append(metaContent, { name: "APIMATIC-META.json" });
-
-    archive.finalize();
-  });
-}
-
-/**
- * Sends a validation request to APIMatic API.
- */
-async function makeApimaticValidationRequest<T>(openApiFile: string, isYaml: boolean): Promise<T | []> {
-  try {
-    const zipBuffer = await createZipFile(openApiFile, isYaml);
-    const fileStream = Readable.from(zipBuffer);
-    const file = new FileWrapper(fileStream, { filename: "api-spec.zip", contentType: "application/zip" });
-
-    const sdkClient = new Client({
-      timeout: 0,
-      authorization: `X-Auth-Key ${APIMATIC_API_KEY}`,
-      USER_AGENT: USER_AGENT,
-    });
-
-    const apiTransformationController = new TransformationController(sdkClient);
-    const { result } = await apiTransformationController.transformViaFile(ContentType.EnumMultipartformdata, file, ExportFormats.APIMATIC);
-
-    return (result as Transformation).importSummary as T;
-  } catch (error: any) {
-    if (error instanceof ApiError) {
-      //console.error("APIMatic API Error:", error.result);
-      return error.result as T;
-    }
-    //console.error("Unexpected Error:", error);
-    throw error;
-  }
-}
-
-// MCP Server Tool Definition
-server.tool(
-  "validate-openapi-using-apimatic",
-  "Get validation summary for your OpenAPI spec using APIMatic",
-  {
-    openApiFile: z.string().describe("The OpenAPI file content as a string"),
-    isYaml: z.boolean().describe("Whether the OpenAPI file is in YAML format"),
-  },
-  async ({ openApiFile, isYaml }) => {
-    const validationData = await makeApimaticValidationRequest<ApiValidationSummary>(openApiFile, isYaml);
-
-    return {
-      content: [{ type: "text", text: validationData ? JSON.stringify(validationData) : "Failed to retrieve validation data" }],
-    };
-  }
-);
-
-/**
- * Main function to initialize the MCP server.
- */
-async function main() {
-  try {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    console.error("APIMatic Validation MCP Server running on stdio");
-  } catch (error) {
-    console.error("Fatal error in main():", error);
-    process.exit(1);
-  }
-}
-
-main();
