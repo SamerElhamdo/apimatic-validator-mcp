@@ -1,81 +1,98 @@
-# APIMatic Validator MCP Server
+# @encryptosystem/mcp-django
 
-This repository provides a Model Context Protocol (MCP) Server for validating OpenAPI specifications using [APIMatic](https://www.apimatic.io/). The server processes OpenAPI files and returns validation summaries by leveraging APIMatic’s API.
+A reusable, MCP-compatible SDK that connects to a Django REST API to orchestrate inventory automations from n8n or any Model Context Protocol client. The package exposes a Fastify-based MCP server with real-time SSE streams and modular tools for managing company products.
 
 ## Features
 
-- Validates OpenAPI 2.0 and 3.0 files
-- Uses APIMatic’s API for comprehensive validation
-- Supports both JSON and YAML formats
-- Implements Model Context Protocol (MCP) for seamless integration
+- 🔌 **Django-native MCP server** powered by Fastify with automatic CORS headers and SSE endpoints.
+- 🧰 **Reusable tool library** for creating, listing, updating, and deleting products.
+- ⚙️ **Configurable via environment variables** with first-class support for `.env` files.
+- 🚀 **n8n-ready npm package** that can be executed directly with `npx @encryptosystem/mcp-django`.
+- 📦 **TypeScript source** compiled with `tsup` to ship ESM output and generated type definitions.
 
 ## Installation
 
-Ensure that **Node.js v18+** is installed.
-
-### Clone the Repository
-```sh
-git clone https://github.com/apimatic/apimatic-validator-mcp.git
-cd apimatic-validator-mcp
+```bash
+npm install @encryptosystem/mcp-django
 ```
 
-### Install Dependencies
-```sh
+### Local development
+
+Clone the repository and install dependencies:
+
+```bash
 npm install
-```
-
-### Build the Project
-```sh
-npm run build
 ```
 
 ## Configuration
 
-To use the server, an APIMatic API key is required. Sign up at [APIMatic](https://www.apimatic.io/) and obtain the API key.
+Create a `.env` file or provide the following environment variables before running the server:
 
-
-![image](https://github.com/user-attachments/assets/1e2388dd-1330-4dab-a6e0-c6738a494ab9)
-
-
-### Integration with Claude Desktop
-
-Modify the `claude_desktop_config.json` file to integrate the MCP server. If the file does not exist, create one in the following location:
-
-#### Windows
-```sh
-code $env:AppData\Claude\claude_desktop_config.json
+```env
+API_BASE_URL=https://api.encryptosystem.com/api
+AUTH_BEARER_TOKEN=your-admin-bearer-token
+COMPANY_ID=123
+API_TIMEOUT=30000
+PORT=3000
 ```
 
-#### macOS/Linux
-```sh
-code ~/Library/Application\ Support/Claude/claude_desktop_config.json
-```
+| Variable | Description |
+|----------|-------------|
+| `API_BASE_URL` | Base URL for the Django REST API (no trailing slash required). |
+| `AUTH_BEARER_TOKEN` | Bearer token for authenticating requests. |
+| `COMPANY_ID` | Company identifier used to scope product routes. |
+| `API_TIMEOUT` | Optional request timeout in milliseconds (defaults to `30000`). |
+| `PORT` | Optional Fastify server port (defaults to `3000`). |
 
-### Add the MCP Server to the Configuration
-```json
-{
-    "mcpServers": {
-        "APIMatic": {
-            "command": "node",
-            "args": [
-                "C:\\PATH\\TO\\PARENT\\FOLDER\\build\\index.js"
-            ],
-            "env": {
-                "APIMATIC_API_KEY": "<Add your APIMatic token here>"
-            }
-        }
-    }
-}
-```
+## Available tools
 
-Once configured, a hammer icon should appear in Claude Desktop. Open it to verify that the `validate-openapi-using-apimatic` tool is successfully integrated.
+Each tool is loaded dynamically from the `src/tools` directory and exposed over MCP:
+
+| Tool | Method | Path | Description |
+|------|--------|------|-------------|
+| `createProduct` | `POST` | `/companies/{COMPANY_ID}/products/` | Create a new product. |
+| `listProducts` | `GET` | `/companies/{COMPANY_ID}/products/` | List products with optional query filters. |
+| `updateStock` | `PATCH` | `/companies/{COMPANY_ID}/products/{productId}/` | Update on-hand quantity for a product. |
+| `deleteProduct` | `DELETE` | `/companies/{COMPANY_ID}/products/{productId}/` | Remove a product. |
 
 ## Usage
 
-1. Add an OpenAPI file.
-2. Provide a prompt to validate it.
-3. The validation results will be returned.
+### Development server
 
-[APIMatic MCP Server For OpenAPI Validation.webm](https://github.com/user-attachments/assets/b7d14e20-1c82-4a70-b237-7e5b6bd80993)
+Run the TypeScript entry point with hot reloading using `tsx`:
 
+```bash
+npm run dev
+```
+
+### Build for distribution
+
+Compile the package to `dist/` with bundled type definitions:
+
+```bash
+npm run build
+```
+
+### NPX runner
+
+Execute the published package without installing it globally:
+
+```bash
+npx @encryptosystem/mcp-django          # Starts the Fastify MCP server
+npx @encryptosystem/mcp-django start    # Explicit start command
+npx @encryptosystem/mcp-django list-tools
+```
+
+The CLI prints the registered endpoints and available tools after startup. Use `list-tools` to confirm the exported toolset before automating workflows.
+
+## Publishing workflow
+
+1. Log in to npm: `npm login`
+2. Bump the version: `npm version patch`
+3. Publish the package: `npm publish --access public`
+4. Validate the CLI entry point: `npx @encryptosystem/mcp-django list-tools`
+
+## License
+
+MIT © Encryptosystem
 
