@@ -1,4 +1,5 @@
 import axios from 'axios';
+
 import { getApiClient } from '../httpClient.js';
 import { ToolDefinition } from '../server.js';
 
@@ -37,11 +38,7 @@ function pickCreateProductPayload(params: Record<string, unknown>): CreateProduc
 
 const createProduct: ToolDefinition = {
   name: 'createProduct',
-  description: 'Create a new product for the provided company.',
-  method: 'POST',
-  path: '/companies/{companyId}/products/',
-  inputs: {
-    companyId: 'number',
+
     name: 'string',
     price: 'number',
     quantity: 'number',
@@ -56,17 +53,7 @@ const createProduct: ToolDefinition = {
     category_name: 'string?',
   },
   async execute(params) {
-    const client = getApiClient();
-    const { companyId, ...rawPayload } = params as Record<string, unknown>;
 
-    if (companyId === undefined || companyId === null || companyId === '') {
-      return { success: false, error: 'The "companyId" parameter is required.' };
-    }
-
-    try {
-      const payload = pickCreateProductPayload(rawPayload);
-      const result = await client.post<Record<string, unknown>>(
-        `/companies/${companyId}/products/`,
         payload,
       );
 

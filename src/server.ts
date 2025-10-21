@@ -103,6 +103,7 @@ export class McpServerApp {
 
     this.fastify.get('/health', async () => ({
       status: 'ok',
+
       tools: this.listTools(),
       timestamp: new Date().toISOString(),
     }));

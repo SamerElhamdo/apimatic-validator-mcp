@@ -1,4 +1,5 @@
 import axios from 'axios';
+
 import { getApiClient } from '../httpClient.js';
 import { ToolDefinition } from '../server.js';
 
@@ -6,26 +7,12 @@ const updateStock: ToolDefinition = {
   name: 'updateStock',
   description: 'Update the stock quantity for a product.',
   method: 'PATCH',
-  path: '/companies/{companyId}/products/{productId}/',
-  inputs: {
-    companyId: 'number',
+
     productId: 'number',
     quantity: 'number',
   },
   async execute(params) {
-    const client = getApiClient();
-    const { companyId, productId, quantity } = params as {
-      companyId?: unknown;
-      productId?: unknown;
-      quantity?: unknown;
-    };
 
-    if (companyId === undefined || companyId === null || companyId === '') {
-      return { success: false, error: 'The "companyId" parameter is required.' };
-    }
-
-    if (typeof productId !== 'number') {
-      return { success: false, error: 'The "productId" parameter must be a number.' };
     }
 
     if (typeof quantity !== 'number') {
@@ -34,7 +21,7 @@ const updateStock: ToolDefinition = {
 
     try {
       const result = await client.patch<Record<string, unknown>>(
-        `/companies/${companyId}/products/${productId}/`,
+
         { quantity },
       );
 
