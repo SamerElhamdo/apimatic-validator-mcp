@@ -31,7 +31,7 @@ Create a `.env` file or provide the following environment variables before runni
 ```env
 API_BASE_URL=https://api.encryptosystem.com/api
 AUTH_BEARER_TOKEN=your-admin-bearer-token
-COMPANY_ID=123
+
 API_TIMEOUT=30000
 PORT=3000
 ```
@@ -40,22 +40,6 @@ PORT=3000
 |----------|-------------|
 | `API_BASE_URL` | Base URL for the Django REST API (no trailing slash required). |
 | `AUTH_BEARER_TOKEN` | Bearer token for authenticating requests. |
-| `COMPANY_ID` | Company identifier used to scope product routes. |
-| `API_TIMEOUT` | Optional request timeout in milliseconds (defaults to `30000`). |
-| `PORT` | Optional Fastify server port (defaults to `3000`). |
-
-## Available tools
-
-Each tool is loaded dynamically from the `src/tools` directory and exposed over MCP:
-
-| Tool | Method | Path | Description |
-|------|--------|------|-------------|
-| `createProduct` | `POST` | `/companies/{COMPANY_ID}/products/` | Create a new product. |
-| `listProducts` | `GET` | `/companies/{COMPANY_ID}/products/` | List products with optional query filters. |
-| `updateStock` | `PATCH` | `/companies/{COMPANY_ID}/products/{productId}/` | Update on-hand quantity for a product. |
-| `deleteProduct` | `DELETE` | `/companies/{COMPANY_ID}/products/{productId}/` | Remove a product. |
-
-## Usage
 
 ### Development server
 
